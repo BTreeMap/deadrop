@@ -5,7 +5,7 @@ set -euo pipefail
 
 # --- Configuration ---
 DEFAULT_ENDPOINT="https://deadrop.joefang.org" # Replace with actual default endpoint if different
-INSTALL_DEPS_URL="https://raw.githubusercontent.com/joefang/deadrop/main/install-deps.sh" # Assumed URL for dependency installer
+INSTALL_DEPS_URL="https://raw.githubusercontent.com/BTreeMap/deadrop/main/client/install-deps.sh" # Updated URL
 
 # --- Global Variables ---
 ENDPOINT="${ENDPOINT:-$DEFAULT_ENDPOINT}"
