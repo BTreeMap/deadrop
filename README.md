@@ -2,7 +2,7 @@
 
 **Status:** This document is currently a proposal/Work-in-Progress; no specific timeline for completion has been set.
 
-Encrypted "dead‑drop" service allowing users to anonymously submit and retrieve data using a single X25519 keypair. Data is encrypted client-side and stored server-side under your public key. Retrieval and notification APIs perform a stateless proof-of-possession via short‑lived, encrypted JWT challenges.
+Encrypted "dead‑drop" service allowing users to anonymously submit and retrieve data using a single X25519 keypair. Data is encrypted client-side and stored server-side under your public key. Retrieval and notification APIs perform a stateless proof-of-possession via a single challenge endpoint returning an encrypted JWT, which is then used with standard `Authorization: Bearer` headers.
 
 ---
 
@@ -18,10 +18,9 @@ Encrypted "dead‑drop" service allowing users to anonymously submit and retriev
 * **Server (`deadrop.joefang.org`)**
 
   * `POST /upload`: store encrypted payload
-  * `POST /retrieve`: issue encrypted JWT challenge
-  * `POST /retrieve/confirm`: verify JWT & return stored items
-  * `POST /notify`: issue encrypted JWT challenge (embed `telegram` claim)
-  * `POST /notify/confirm`: verify JWT & register Telegram hook
+  * `POST /challenge`: issue encrypted JWT challenge for a given scope (retrieve/notify)
+  * `POST /retrieve`: verify JWT & return stored items
+  * `POST /notify`: verify JWT & register Telegram hook
 
 ---
 
@@ -94,9 +93,10 @@ Authenticate via encrypted JWT and download items:
 deadrop.sh retrieve -i id_x25519 -o ./downloads
 ```
 
-1. `POST /retrieve` with `{ "pubkey": "<pub>" }` → returns base64 `ciphertext`
-2. Client decrypts to JWT, then `POST /retrieve/confirm` with `{ "token": "<jwt>" }`
-3. Server verifies JWT `sub`, `aud: "/retrieve"`, `exp`, then returns stored items as JSON list of base64 blobs
+1. Client calls `POST /challenge` with `{ "pubkey": "<pub>", "scope": "retrieve" }` → returns `{ "ciphertext": "<age-encrypted JWT>" }`
+2. Client decrypts ciphertext to get the JWT.
+3. Client calls `POST /retrieve` with `Authorization: Bearer <jwt>` header.
+4. Server verifies JWT (`sub`, `aud: "/retrieve"`, `exp`), then returns stored items as JSON list of base64 blobs.
 
 Each item is saved and decrypted locally.
 
@@ -108,25 +108,28 @@ Register a Telegram hook:
 deadrop.sh notify -i id_x25519 -t "@alice"  # or numeric user ID
 ```
 
-Same two-step flow against `/notify` and `/notify/confirm`. JWT payload includes `telegram` claim.
+1. Client calls `POST /challenge` with `{ "pubkey": "<pub>", "scope": "notify", "telegram": "<target>" }` → returns `{ "ciphertext": "<age-encrypted JWT>" }`
+2. Client decrypts ciphertext to get the JWT.
+3. Client calls `POST /notify` with `Authorization: Bearer <jwt>` header.
+4. Server verifies JWT (`sub`, `aud: "/notify"`, `exp`, `telegram`), then registers the hook.
 
 ---
 
 ## Server API
 
-All endpoints expect and return JSON. Client encrypts all JWT challenges via age.
+All endpoints expect and return JSON unless otherwise specified. Client decrypts the JWT challenge received from `/challenge`.
 
 ### `POST /upload`
 
 * **Headers**: `X-PubKey: <user X25519 pub>`
 * **Body**: raw ciphertext
-* **Response**: `200 OK` on success
+* **Response**: `201 Created` on success
 
 Server stores each blob with its associated public key and timestamp.
 
-### `POST /retrieve`
+### `POST /challenge`
 
-* **Body**: `{ "pubkey": "<user X25519 pub>" }`
+* **Body**: `{ "pubkey": "<user X25519 pub>", "scope": "<retrieve|notify>", "telegram"?: "<telegram_target_if_notify>" }`
 * **Response**: `{ "ciphertext": "<age-encrypted JWT>" }`
 
 Server creates a JWT with:
@@ -134,43 +137,38 @@ Server creates a JWT with:
 ```json
 {
   "sub": "<pubkey>",
-  "aud": "/retrieve",
+  "aud": "/<scope>", // e.g., "/retrieve" or "/notify"
   "iat": <now>,
-  "exp": <now + 300>
+  "exp": <now + 300>,
+  "telegram"?: "<telegram_target_if_notify>" // Included only for notify scope
 }
 ```
 
-Then signs and encrypts via age for the user’s `pubkey`.
+Then signs (HS256) and encrypts via age for the user’s `pubkey`.
 
-### `POST /retrieve/confirm`
+### `POST /retrieve`
 
-* **Body**: `{ "token": "<signed JWT>" }`
+* **Headers**: `Authorization: Bearer <signed JWT>`
 * **Response**: `{ "items": [ "<base64-cipher1>", ... ] }`
 
-Server verifies signature, `aud`, `exp`, matches `sub`, then returns stored blobs.
+Server verifies JWT signature, `aud: "/retrieve"`, `exp`, matches `sub` to an existing user with data, then returns stored blobs associated with the `sub` (pubkey).
 
 ### `POST /notify`
 
-* **Body**: `{ "pubkey": "<user X25519 pub>" }`
-* **Response**: `{ "ciphertext": "<age-encrypted JWT>" }`
-
-JWT payload also includes `telegram` once confirmed.
-
-### `POST /notify/confirm`
-
-* **Body**: `{ "token": "<signed JWT>" }`
+* **Headers**: `Authorization: Bearer <signed JWT>`
 * **Response**: `200 OK`
 
-Server verifies and registers the Telegram ID for push notifications on future uploads.
+Server verifies JWT signature, `aud: "/notify"`, `exp`, and the presence of the `telegram` claim. It then registers the Telegram ID from the claim for push notifications on future uploads associated with the `sub` (pubkey).
 
 ---
 
 ## Security Considerations
 
-* **Single keypair**: only X25519 used for both encryption and proof-of-possession
-* **Stateless**: encrypted JWT carries `iat`/`exp`/`sub`/`aud`; no server-side cache
-* **Short TTL** (default 5 minutes) prevents replay attacks
-* **TLS** protects tokens in transit
+* **Single keypair**: only X25519 used for both encryption and proof-of-possession.
+* **Stateless Authentication**: Encrypted JWT carries necessary claims (`iat`/`exp`/`sub`/`aud`/`telegram`); server verifies the token presented in the `Authorization` header. No server-side session state needed after issuing the challenge.
+* **Short TTL** (default 5 minutes) on JWT prevents replay attacks.
+* **TLS** protects headers (including `Authorization`) and bodies in transit.
+* **Scope Claim**: The `aud` (audience) claim in the JWT ensures a token issued for one purpose (e.g., `retrieve`) cannot be used for another (e.g., `notify`).
 
 ---
 
