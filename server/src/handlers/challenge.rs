@@ -1,9 +1,12 @@
 use crate::AppState;
+use age::{Encryptor, Recipient, x25519};
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::Deserialize;
 use serde_json::json;
+use std::io::Write;
 
 #[derive(Deserialize)]
 pub struct ChallengeRequest {
@@ -31,10 +34,13 @@ async fn process_challenge(
     if payload.scope != "retrieve" && payload.scope != "notify" {
         return Err((StatusCode::BAD_REQUEST, "Invalid scope".to_string()));
     }
-    // Validate pubkey (basic check, should be base64 X25519)
-    if payload.pubkey.len() < 32 {
-        return Err((StatusCode::BAD_REQUEST, "Invalid pubkey".to_string()));
-    }
+
+    // Parse recipient public key
+    let recipient = payload
+        .pubkey
+        .parse::<x25519::Recipient>()
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid pubkey: {}", e)))?;
+
     // JWT claims
     let now = Utc::now().timestamp();
     let exp = now + 300; // 5 minutes
@@ -53,6 +59,7 @@ async fn process_challenge(
             ));
         }
     }
+
     // Sign JWT (HS256)
     let jwt = encode(
         &Header::default(),
@@ -65,8 +72,32 @@ async fn process_challenge(
             format!("JWT error: {}", e),
         )
     })?;
-    // Encrypt JWT with age (X25519) - placeholder
-    // TODO: Use an age crate to encrypt the JWT for payload.pubkey
-    let ciphertext = format!("age({})", jwt); // Placeholder
-    Ok(ciphertext)
+
+    // Encrypt JWT with age (X25519)
+    let encryptor =
+        Encryptor::with_recipients(vec![Box::new(recipient) as Box<dyn Recipient + Send>]);
+    let mut encrypted_jwt = vec![];
+    let mut writer = encryptor.wrap_output(&mut encrypted_jwt).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Age encryption error: {}", e),
+        )
+    })?;
+    writer.write_all(jwt.as_bytes()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Age write error: {}", e),
+        )
+    })?;
+    writer.finish().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Age finish error: {}", e),
+        )
+    })?;
+
+    // Base64 encode the ciphertext
+    let ciphertext_b64 = BASE64.encode(&encrypted_jwt);
+
+    Ok(ciphertext_b64)
 }
