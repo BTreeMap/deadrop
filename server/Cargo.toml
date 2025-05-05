@@ -4,9 +4,12 @@ version = "0.0.0"
 edition = "2024" # Use 2024 edition
 
 [dependencies]
-tokio = { version = "1.44.2", features = ["full"] }
-axum = "0.8.4"
+tokio = { version = "1.44", features = ["full"] }
+axum = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 jsonwebtoken = "9"
-# Add other necessary dependencies later
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls-ring-webpki"] }
+dotenvy = "0.15"
+uuid = { version = "1.16", features = ["v4"] }
+chrono = { version = "0.4", features = ["clock"] }
