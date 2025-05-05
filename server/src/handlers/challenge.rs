@@ -1,4 +1,4 @@
-use crate::AppState;
+use crate::{AppState, config::Config};
 use age::{Encryptor, Recipient, x25519};
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -19,7 +19,7 @@ pub async fn handle_challenge(
     State(state): State<AppState>,
     Json(payload): Json<ChallengeRequest>,
 ) -> impl IntoResponse {
-    match process_challenge(&state, &payload).await {
+    match process_challenge(&state.config, &payload).await {
         Ok(ciphertext) => (StatusCode::OK, Json(json!({ "ciphertext": ciphertext }))),
         Err((status, msg)) => (status, Json(json!({ "error": msg }))),
     }
@@ -27,7 +27,7 @@ pub async fn handle_challenge(
 
 // Internal implementation module, not public
 async fn process_challenge(
-    state: &AppState,
+    config: &Config,
     payload: &ChallengeRequest,
 ) -> Result<String, (StatusCode, String)> {
     // Validate scope
@@ -43,7 +43,7 @@ async fn process_challenge(
 
     // JWT claims
     let now = Utc::now().timestamp();
-    let exp = now + 300; // 5 minutes
+    let exp = now + config.jwt_expiration_seconds;
     let mut claims = serde_json::Map::new();
     claims.insert("sub".to_string(), json!(payload.pubkey));
     claims.insert("aud".to_string(), json!(format!("/{}", payload.scope)));
@@ -64,7 +64,7 @@ async fn process_challenge(
     let jwt = encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
+        &EncodingKey::from_secret(config.jwt_secret.as_bytes()),
     )
     .map_err(|e| {
         (

@@ -1,6 +1,6 @@
-use actix_web::{HttpRequest, HttpResponse};
+use axum::{http::StatusCode, response::IntoResponse};
 
-pub async fn handle_notify(_req: HttpRequest) -> HttpResponse {
+pub async fn handle_notify() -> impl IntoResponse {
     // Call the actual implementation here (to be implemented in another module)
-    HttpResponse::Ok().body("notify handler stub")
+    (StatusCode::OK, "notify handler stub")
 }

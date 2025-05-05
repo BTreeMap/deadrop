@@ -1,6 +1,6 @@
-use actix_web::{HttpRequest, HttpResponse};
+use axum::{http::StatusCode, response::IntoResponse};
 
-pub async fn handle_upload(_req: HttpRequest) -> HttpResponse {
+pub async fn handle_upload() -> impl IntoResponse {
     // Call the actual implementation here (to be implemented in another module)
-    HttpResponse::Created().body("upload handler stub")
+    (StatusCode::CREATED, "upload handler stub")
 }

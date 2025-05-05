@@ -29,7 +29,7 @@ fn default_jwt_expiration() -> i64 {
 #[derive(Clone)]
 pub struct AppState {
     pub db_pool: Arc<Pool<Postgres>>,
-    pub jwt_secret: Arc<String>,
+    pub config: Arc<Config>,
 }
 
 pub fn load_config() -> Result<Config, envy::Error> {
