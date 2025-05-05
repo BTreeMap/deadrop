@@ -427,6 +427,7 @@ version = "0.0.0"
 dependencies = [
  "age",
  "axum",
+ "base64 0.22.1",
  "chrono",
  "dotenvy",
  "envy",
