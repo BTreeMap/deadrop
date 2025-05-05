@@ -1,4 +1,5 @@
 mod config;
+pub mod db;
 mod handlers;
 mod routes;
 
