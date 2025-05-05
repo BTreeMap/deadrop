@@ -12,6 +12,8 @@ pub struct Config {
     pub jwt_secret: String,
     #[serde(default = "default_jwt_expiration")]
     pub jwt_expiration_seconds: i64,
+    #[serde(default = "default_retrieve_page_size")]
+    pub retrieve_page_size: u32, // New: default page size for /retrieve
 }
 
 fn default_host() -> String {
@@ -24,6 +26,10 @@ fn default_port() -> u16 {
 
 fn default_jwt_expiration() -> i64 {
     300 // 5 minutes default
+}
+
+fn default_retrieve_page_size() -> u32 {
+    50 // Default page size for pagination
 }
 
 #[derive(Clone)]

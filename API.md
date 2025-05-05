@@ -60,25 +60,33 @@ Initiates the authentication process by requesting an encrypted challenge token.
 
 ### `POST /retrieve`
 
-Retrieves a list of available item IDs after successful authentication.
+Retrieves a paginated list of available item IDs after successful authentication.
 
 * **Headers**:
   * `Authorization: Bearer <signed JWT>` (Obtained from decrypting `/challenge` response)
+* **Query Parameters**:
+  * `cursor` (optional): The item ID (UUID string) to start pagination from (exclusive). If omitted, returns the first page.
 * **Body**: Empty.
 * **Response**:
   * `200 OK`: On successful authentication and verification.
-    * **Body**: JSON array of item IDs associated with the public key in the JWT `sub` claim.
+    * **Body**: JSON object containing an array of item IDs and an optional `next_cursor` for pagination.
 
       ```json
-      [
-        "<item_id_1>",
-        "<item_id_2>",
-        ...
-      ]
+      {
+        "items": [
+          "<item_id_1>",
+          "<item_id_2>",
+          "..."
+        ],
+        "next_cursor": "<item_id_N>" // Omitted if no more items
+      }
       ```
 
+    * Items are ordered by `created_at` (descending), then by `id` (descending). The number of items per page is fixed by the server configuration and cannot be changed by the client.
+    * To fetch the next page, use the `next_cursor` value as the `cursor` query parameter in the next request. If `next_cursor` is absent, there are no more items.
+
   * `401 Unauthorized`: If the JWT is missing, invalid (signature, expiration, `aud` claim != `/retrieve`), or the `sub` key has no items.
-  * `400 Bad Request`: If headers are malformed.
+  * `400 Bad Request`: If headers or cursor are malformed.
 
 ### `GET /download/{item_id}`
 
