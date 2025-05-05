@@ -65,7 +65,7 @@ Retrieves a paginated list of available item IDs after successful authentication
 * **Headers**:
   * `Authorization: Bearer <signed JWT>` (Obtained from decrypting `/challenge` response)
 * **Query Parameters**:
-  * `cursor` (optional): The item ID (UUID string) to start pagination from (exclusive). If omitted, returns the first page.
+  * `cursor` (optional): An opaque, server-issued token for pagination. If omitted, returns the first page. The client must not attempt to construct or modify this value.
 * **Body**: Empty.
 * **Response**:
   * `200 OK`: On successful authentication and verification.
@@ -78,12 +78,13 @@ Retrieves a paginated list of available item IDs after successful authentication
           "<item_id_2>",
           "..."
         ],
-        "next_cursor": "<item_id_N>" // Omitted if no more items
+        "next_cursor": "<opaque-cursor-token>" // Omitted if no more items
       }
       ```
 
     * Items are ordered by `created_at` (descending), then by `id` (descending). The number of items per page is fixed by the server configuration and cannot be changed by the client.
     * To fetch the next page, use the `next_cursor` value as the `cursor` query parameter in the next request. If `next_cursor` is absent, there are no more items.
+    * The format and contents of the cursor are not specified and may change; treat it as an opaque string.
 
   * `401 Unauthorized`: If the JWT is missing, invalid (signature, expiration, `aud` claim != `/retrieve`), or the `sub` key has no items.
   * `400 Bad Request`: If headers or cursor are malformed.

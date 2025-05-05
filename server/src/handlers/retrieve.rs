@@ -9,6 +9,10 @@ use axum_extra::{
     TypedHeader,
     headers::{Authorization, authorization::Bearer},
 };
+use chrono::{DateTime, Utc};
+use jsonwebtoken::{
+    Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode,
+};
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -23,6 +27,14 @@ pub struct RetrieveQuery {
 pub struct RetrieveResponse {
     items: Vec<String>, // item IDs as strings
     next_cursor: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CursorClaims {
+    exp: usize,
+    scope: String, // should be "/retrieve-cursor"
+    created_at: DateTime<Utc>,
+    id: uuid::Uuid,
 }
 
 pub async fn handle_retrieve(
@@ -40,27 +52,17 @@ pub async fn handle_retrieve(
     };
     let pubkey = &claims.sub;
     let page_size = state.config.retrieve_page_size as usize;
-    let mut items: Vec<DbItem> = Vec::new();
     let mut next_cursor = None;
-    // Parse cursor if present
-    let cursor_uuid = match &query.cursor {
-        Some(cursor_str) => match Uuid::parse_str(cursor_str) {
-            Ok(uuid) => Some(uuid),
-            Err(_) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(serde_json::json!({"error": "Invalid cursor"})),
-                )
-                    .into_response();
+    let (created_at_cursor, id_cursor) = if let Some(cursor_str) = &query.cursor {
+        // Decode and verify cursor JWT
+        let token_data: TokenData<CursorClaims> = match decode::<CursorClaims>(
+            cursor_str,
+            &DecodingKey::from_secret(state.config.jwt_secret.as_bytes()),
+            &Validation::new(Algorithm::HS256),
+        ) {
+            Ok(data) if data.claims.scope == "/retrieve-cursor" => {
+                (data.claims.created_at, data.claims.id)
             }
-        },
-        None => None,
-    };
-    // Query items for pubkey, paginated by created_at DESC, id DESC
-    let db_items = if let Some(cursor_id) = cursor_uuid {
-        // Get the created_at for the cursor item
-        let cursor_item = match DbItem::get_item_by_id(&state.db_pool, cursor_id).await {
-            Ok(Some(item)) if item.pubkey == *pubkey => item,
             _ => {
                 return (
                     StatusCode::BAD_REQUEST,
@@ -69,19 +71,26 @@ pub async fn handle_retrieve(
                     .into_response();
             }
         };
-        // Fetch items created before the cursor's created_at, or same created_at but smaller id
+        (
+            Some(token_data.claims.created_at),
+            Some(token_data.claims.id),
+        )
+    } else {
+        (None, None)
+    };
+    // Query items for pubkey, paginated by created_at DESC, id DESC
+    let db_items = if let (Some(created_at), Some(id)) = (created_at_cursor, id_cursor) {
         sqlx::query_as::<_, DbItem>(
             "SELECT * FROM items WHERE pubkey = $1 AND (created_at < $2 OR (created_at = $2 AND id < $3)) ORDER BY created_at DESC, id DESC LIMIT $4"
         )
         .bind(pubkey)
-        .bind(cursor_item.created_at)
-        .bind(cursor_item.id)
+        .bind(created_at)
+        .bind(id)
         .bind(page_size as i64)
         .fetch_all(&*state.db_pool)
         .await
         .unwrap_or_default()
     } else {
-        // First page
         sqlx::query_as::<_, DbItem>(
             "SELECT * FROM items WHERE pubkey = $1 ORDER BY created_at DESC, id DESC LIMIT $2",
         )
@@ -93,8 +102,22 @@ pub async fn handle_retrieve(
     };
     let item_ids: Vec<String> = db_items.iter().map(|item| item.id.to_string()).collect();
     if db_items.len() == page_size {
-        // There may be more items, set next_cursor to the last item's id
-        next_cursor = db_items.last().map(|item| item.id.to_string());
+        if let Some(last) = db_items.last() {
+            // Create a signed cursor JWT
+            let claims = CursorClaims {
+                exp: (Utc::now() + chrono::Duration::minutes(10)).timestamp() as usize,
+                scope: "/retrieve-cursor".to_string(),
+                created_at: last.created_at,
+                id: last.id,
+            };
+            let token = encode(
+                &Header::default(),
+                &claims,
+                &EncodingKey::from_secret(state.config.jwt_secret.as_bytes()),
+            )
+            .unwrap();
+            next_cursor = Some(token);
+        }
     }
     let resp = RetrieveResponse {
         items: item_ids,

@@ -96,9 +96,9 @@ deadrop.sh retrieve -i id_x25519 -o ./downloads
 1. Client calls `POST /challenge` with `{ "pubkey": "<pub>", "scope": "retrieve" }` → returns `{ "ciphertext": "<age-encrypted JWT>" }`
 2. Client decrypts ciphertext to get the JWT.
 3. Client calls `POST /retrieve` with `Authorization: Bearer <jwt>` header.
-4. Server verifies JWT (`sub`, `aud: "/retrieve"`, `exp`), then returns stored items as JSON list of base64 blobs.
+4. Server verifies JWT (`sub`, `aud: "/retrieve"`, `exp`), then returns stored items as a paginated JSON list of item IDs and an optional opaque `next_cursor` token for pagination.
 
-Each item is saved and decrypted locally.
+Each item is saved and decrypted locally. To fetch more items, pass the `next_cursor` value as the `cursor` query parameter in the next request. The format and contents of the cursor are not specified and may change; treat it as an opaque string.
 
 ### `notify`
 
@@ -149,9 +149,10 @@ Then signs (HS256) and encrypts via age for the user’s `pubkey`.
 ### `POST /retrieve`
 
 * **Headers**: `Authorization: Bearer <signed JWT>`
-* **Response**: `{ "items": [ "<base64-cipher1>", ... ] }`
+* **Query**: `cursor` (optional, opaque server-issued token for pagination)
+* **Response**: `{ "items": [ "<item_id1>", ... ], "next_cursor": "<opaque-cursor-token>" }`
 
-Server verifies JWT signature, `aud: "/retrieve"`, `exp`, matches `sub` to an existing user with data, then returns stored blobs associated with the `sub` (pubkey).
+Server verifies JWT signature, `aud: "/retrieve"`, `exp`, matches `sub` to an existing user with data, then returns a paginated list of item IDs and a server-issued opaque cursor for pagination. The client must not attempt to construct or modify the cursor value.
 
 ### `POST /notify`
 
