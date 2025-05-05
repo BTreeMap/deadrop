@@ -1,0 +1,5 @@
+# Ignore build artifacts
+/target
+
+# Ignore Cargo lock file (it's copied explicitly in Dockerfile)
+Cargo.lock

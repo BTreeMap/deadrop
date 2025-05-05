@@ -1,6 +1,12 @@
 [package]
 name = "deadrop-server"
 version = "0.0.0"
-edition = "2024"
+edition = "2024" # Use 2024 edition
 
 [dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+jsonwebtoken = "9"
+# Add other necessary dependencies later
