@@ -55,14 +55,15 @@ pub async fn handle_retrieve(
     let mut next_cursor = None;
     let (created_at_cursor, id_cursor) = if let Some(cursor_str) = &query.cursor {
         // Decode and verify cursor JWT
-        let token_data: TokenData<CursorClaims> = match decode::<CursorClaims>(
+        match decode::<CursorClaims>(
             cursor_str,
             &DecodingKey::from_secret(state.config.jwt_secret.as_bytes()),
             &Validation::new(Algorithm::HS256),
         ) {
-            Ok(data) if data.claims.scope == "/retrieve-cursor" => {
-                (data.claims.created_at, data.claims.id)
-            }
+            Ok(token_data) if token_data.claims.scope == "/retrieve-cursor" => (
+                Some(token_data.claims.created_at),
+                Some(token_data.claims.id),
+            ),
             _ => {
                 return (
                     StatusCode::BAD_REQUEST,
@@ -70,11 +71,7 @@ pub async fn handle_retrieve(
                 )
                     .into_response();
             }
-        };
-        (
-            Some(token_data.claims.created_at),
-            Some(token_data.claims.id),
-        )
+        }
     } else {
         (None, None)
     };
