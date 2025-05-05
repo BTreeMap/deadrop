@@ -74,8 +74,15 @@ async fn process_challenge(
     })?;
 
     // Encrypt JWT with age (X25519)
+    let recipients: Vec<Box<dyn Recipient + Send>> = vec![Box::new(recipient)];
     let encryptor =
-        Encryptor::with_recipients(vec![Box::new(recipient) as Box<dyn Recipient + Send>]);
+        Encryptor::with_recipients(recipients.iter().map(|r| r.as_ref() as &dyn Recipient))
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Age encryption error: {}", e),
+                )
+            })?;
     let mut encrypted_jwt = vec![];
     let mut writer = encryptor.wrap_output(&mut encrypted_jwt).map_err(|e| {
         (
