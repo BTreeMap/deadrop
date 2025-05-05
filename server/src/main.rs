@@ -1,3 +1,4 @@
+pub mod auth;
 mod config;
 pub mod db;
 mod handlers;
