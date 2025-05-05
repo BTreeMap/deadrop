@@ -35,10 +35,10 @@ Encrypted "dead‑drop" service allowing users to anonymously submit and retriev
 
 * **Server**
 
-  * HTTP server (e.g. NGINX) with TLS
-  * Application runtime (e.g. Go/Python/Node)
+  * [Rust](https://www.rust-lang.org/) (stable toolchain)
+  * [Docker](https://www.docker.com/)
   * Database (e.g. PostgreSQL) for storing ciphertexts and notification registrations
-  * JWT library supporting HS256
+  * JWT library supporting HS256 (provided by Rust crate)
 
 ---
 
@@ -52,7 +52,7 @@ cd deadrop
 chmod +x deadrop.sh
 ```
 
-Server code is in `/server`. See its own README for deployment instructions.
+Server code is in `/server`. See its `Dockerfile` for build instructions and its own README (to be created) for deployment details.
 
 ---
 
