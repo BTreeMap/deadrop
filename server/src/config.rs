@@ -1,12 +1,13 @@
 use serde::Deserialize;
-use std::net::SocketAddr;
+use sqlx::{Pool, Postgres};
+use std::sync::Arc;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     #[serde(default = "default_host")]
-    pub server_host: String,
+    pub host: String,
     #[serde(default = "default_port")]
-    pub server_port: u16,
+    pub port: u16,
     pub database_url: String,
     pub jwt_secret: String,
     #[serde(default = "default_jwt_expiration")]
@@ -14,24 +15,24 @@ pub struct Config {
 }
 
 fn default_host() -> String {
-    "0.0.0.0".to_string()
+    "127.0.0.1".to_string()
 }
 
 fn default_port() -> u16 {
-    8080
+    63460
 }
 
 fn default_jwt_expiration() -> i64 {
-    300 // 5 minutes
+    300 // 5 minutes default
 }
 
-impl Config {
-    pub fn load() -> Result<Self, envy::Error> {
-        dotenvy::dotenv().ok(); // Load .env file if present
-        envy::from_env::<Config>()
-    }
+#[derive(Clone)]
+pub struct AppState {
+    pub db_pool: Arc<Pool<Postgres>>,
+    pub jwt_secret: Arc<String>,
+}
 
-    pub fn server_addr(&self) -> Result<SocketAddr, std::net::AddrParseError> {
-        format!("{}:{}", self.server_host, self.server_port).parse()
-    }
+pub fn load_config() -> Result<Config, envy::Error> {
+    dotenvy::dotenv().ok(); // Load .env file if present
+    envy::from_env::<Config>()
 }
