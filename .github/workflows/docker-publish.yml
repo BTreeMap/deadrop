@@ -29,7 +29,7 @@ jobs:
           year_month=$(date -u -d "@$now" '+%Y-%m')
           echo "SOURCE_DATE_EPOCH_VAR=$(date -u -d "${year_month}-01 00:00:00" '+%s')" >> $GITHUB_OUTPUT
 
-  build-and-push:
+  build-matrix:
     needs: set-env
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -77,8 +77,8 @@ jobs:
           outputs: "type=registry,compression=zstd,force-compression=true,compression-level=3,rewrite-timestamp=true,oci-mediatypes=true"
 
   create-manifest:
+    needs: [set-env, build-matrix]
     runs-on: ubuntu-24.04
-    needs: [set-env, build-and-push]
     permissions:
       packages: write
     steps:
