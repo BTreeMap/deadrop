@@ -31,7 +31,7 @@ jobs:
       - name: Set lowercase repo name
         id: repo
         run: |
-          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          echo "DOCKER_IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
       - name: Generate date and time strings
         id: dates
@@ -49,12 +49,12 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ env.REPO_LC }}:latest
-            ghcr.io/${{ env.REPO_LC }}:${{ env.DATE_VAR }}
-            ghcr.io/${{ env.REPO_LC }}:${{ env.DATE_TIME_VAR }}
-            ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}
-            ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}.${{ env.DATE_VAR }}
-            ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}.${{ env.DATE_TIME_VAR }}
+            ghcr.io/${{ env.DOCKER_IMAGE_NAME }}:latest
+            ghcr.io/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DATE_VAR }}
+            ghcr.io/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DATE_TIME_VAR }}
+            ghcr.io/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+            ghcr.io/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}.${{ env.DATE_VAR }}
+            ghcr.io/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}.${{ env.DATE_TIME_VAR }}
           build-args: |
             SOURCE_DATE_EPOCH=${{ env.SOURCE_DATE_EPOCH_VAR }}
           outputs: "type=registry,compression=zstd,force-compression=true,compression-level=3,rewrite-timestamp=true,oci-mediatypes=true"
