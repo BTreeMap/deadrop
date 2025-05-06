@@ -21,7 +21,7 @@ pub async fn handle_download(
 ) -> impl IntoResponse {
     // Verify JWT and extract claims
     let jwt = auth_header.0.token();
-    let claims = match verify_jwt_from_header(jwt, &state.config, "/download").await {
+    let claims = match verify_jwt_from_header(jwt, &state.config, "/retrieve").await {
         Ok(c) => c,
         Err((status, msg)) => return (status, msg).into_response(),
     };
