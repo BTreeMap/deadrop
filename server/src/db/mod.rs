@@ -52,7 +52,7 @@ pub async fn db_migrate(pool: &PgPool) -> Result<(), sqlx::Error> {
     "#,
     )
     .await?;
-    // If schema_version is empty, insert version 0
+    // Only insert version 0 if schema_version is empty
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM schema_version")
         .fetch_one(pool)
         .await?;
