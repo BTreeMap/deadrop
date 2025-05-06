@@ -11,6 +11,10 @@ async fn setup_db() -> PgPool {
         .connect(&db_url)
         .await
         .expect("Failed to connect to Postgres");
+    // Run migrations
+    crate::db::db_migrate(&pool)
+        .await
+        .expect("Migration failed");
     // Clean up before each test
     sqlx::query("DELETE FROM items")
         .execute(&pool)

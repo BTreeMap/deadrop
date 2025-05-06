@@ -12,6 +12,7 @@ fn test_config() -> Config {
         jwt_secret: "test_secret_1234567890".to_string(),
         jwt_expiration_seconds: 60,
         retrieve_page_size: 10,
+        database_schema_version: 0,
     }
 }
 

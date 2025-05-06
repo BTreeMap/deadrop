@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::{FromRow, PgPool};
+use sqlx::{Executor, FromRow, PgPool};
 use uuid::Uuid;
 
 #[derive(Debug, FromRow)]
@@ -39,6 +39,41 @@ impl DbItem {
             .fetch_optional(pool)
             .await
     }
+}
+
+/// Run database migrations: create schema_version and items tables if needed.
+pub async fn db_migrate(pool: &PgPool) -> Result<(), sqlx::Error> {
+    // Create schema_version table if it doesn't exist
+    pool.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER NOT NULL
+        )
+    "#,
+    )
+    .await?;
+    // If schema_version is empty, insert version 0
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM schema_version")
+        .fetch_one(pool)
+        .await?;
+    if count.0 == 0 {
+        sqlx::query("INSERT INTO schema_version (version) VALUES (0)")
+            .execute(pool)
+            .await?;
+    }
+    // Create items table if it doesn't exist
+    pool.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS items (
+            id UUID PRIMARY KEY,
+            pubkey TEXT NOT NULL,
+            ciphertext BYTEA NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL
+        )
+    "#,
+    )
+    .await?;
+    Ok(())
 }
 
 #[cfg(test)]

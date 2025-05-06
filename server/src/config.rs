@@ -14,6 +14,8 @@ pub struct Config {
     pub jwt_expiration_seconds: i64,
     #[serde(default = "default_retrieve_page_size")]
     pub retrieve_page_size: u32, // New: default page size for /retrieve
+    #[serde(default = "default_database_schema_version")]
+    pub database_schema_version: u32,
 }
 
 fn default_host() -> String {
@@ -30,6 +32,10 @@ fn default_jwt_expiration() -> i64 {
 
 fn default_retrieve_page_size() -> u32 {
     50 // Default page size for pagination
+}
+
+fn default_database_schema_version() -> u32 {
+    0 // Default schema version
 }
 
 #[derive(Clone)]
