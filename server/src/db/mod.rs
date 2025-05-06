@@ -40,3 +40,6 @@ impl DbItem {
             .await
     }
 }
+
+#[cfg(test)]
+mod tests;
