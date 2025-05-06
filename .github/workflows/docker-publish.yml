@@ -5,14 +5,14 @@ on:
     branches: [main]
 
 jobs:
-  prepare-build-env:
+  set-env:
     runs-on: ubuntu-24.04
     outputs:
       DOCKER_IMAGE_NAME: ${{ steps.env_vars.outputs.DOCKER_IMAGE_NAME }}
-      DATE_VAR: ${{ steps.env_vars.outputs.DATE_VAR }}
-      DATE_TIME_VAR: ${{ steps.env_vars.outputs.DATE_TIME_VAR }}
-      SOURCE_DATE_EPOCH_VAR: ${{ steps.env_vars.outputs.SOURCE_DATE_EPOCH_VAR }}
       SHA_VAR: ${{ steps.env_vars.outputs.SHA_VAR }}
+      DATE_VAR: ${{ steps.dates.outputs.DATE_VAR }}
+      DATE_TIME_VAR: ${{ steps.dates.outputs.DATE_TIME_VAR }}
+      SOURCE_DATE_EPOCH_VAR: ${{ steps.dates.outputs.SOURCE_DATE_EPOCH_VAR }}
     steps:
       - name: Set repository name and SHA
         id: env_vars
@@ -30,7 +30,7 @@ jobs:
           echo "SOURCE_DATE_EPOCH_VAR=$(date -u -d "${year_month}-01 00:00:00" '+%s')" >> $GITHUB_OUTPUT
 
   build-and-push:
-    needs: prepare-build-env
+    needs: set-env
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -61,24 +61,24 @@ jobs:
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
+        env:
+          SOURCE_DATE_EPOCH: ${{ needs.set-env.outputs.SOURCE_DATE_EPOCH_VAR }}
         with:
           context: ./server
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ${{ needs.prepare-build-env.outputs.DOCKER_IMAGE_NAME }}:latest.${{ matrix.variant_suffix }}
-            ${{ needs.prepare-build-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.prepare-build-env.outputs.DATE_VAR }}.${{ matrix.variant_suffix }}
-            ${{ needs.prepare-build-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.prepare-build-env.outputs.DATE_TIME_VAR }}.${{ matrix.variant_suffix }}
-            ${{ needs.prepare-build-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.prepare-build-env.outputs.SHA_VAR }}.${{ matrix.variant_suffix }}
-            ${{ needs.prepare-build-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.prepare-build-env.outputs.SHA_VAR }}.${{ needs.prepare-build-env.outputs.DATE_VAR }}.${{ matrix.variant_suffix }}
-            ${{ needs.prepare-build-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.prepare-build-env.outputs.SHA_VAR }}.${{ needs.prepare-build-env.outputs.DATE_TIME_VAR }}.${{ matrix.variant_suffix }}
-          build-args: |
-            SOURCE_DATE_EPOCH=${{ needs.prepare-build-env.outputs.SOURCE_DATE_EPOCH_VAR }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:latest.${{ matrix.variant_suffix }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.DATE_VAR }}.${{ matrix.variant_suffix }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.DATE_TIME_VAR }}.${{ matrix.variant_suffix }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ matrix.variant_suffix }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ needs.set-env.outputs.DATE_VAR }}.${{ matrix.variant_suffix }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ needs.set-env.outputs.DATE_TIME_VAR }}.${{ matrix.variant_suffix }}
           outputs: "type=registry,compression=zstd,force-compression=true,compression-level=3,rewrite-timestamp=true,oci-mediatypes=true"
 
   create-manifest:
     runs-on: ubuntu-24.04
-    needs: [prepare-build-env, build-and-push]
+    needs: [set-env, build-and-push]
     permissions:
       packages: write
     steps:
@@ -91,10 +91,10 @@ jobs:
 
       - name: Create and push manifest list
         env:
-          DOCKER_IMAGE_NAME: ${{ needs.prepare-build-env.outputs.DOCKER_IMAGE_NAME }}
-          DATE_VAR: ${{ needs.prepare-build-env.outputs.DATE_VAR }}
-          DATE_TIME_VAR: ${{ needs.prepare-build-env.outputs.DATE_TIME_VAR }}
-          SHA_VAR: ${{ needs.prepare-build-env.outputs.SHA_VAR }}
+          DOCKER_IMAGE_NAME: ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}
+          DATE_VAR: ${{ needs.set-env.outputs.DATE_VAR }}
+          DATE_TIME_VAR: ${{ needs.set-env.outputs.DATE_TIME_VAR }}
+          SHA_VAR: ${{ needs.set-env.outputs.SHA_VAR }}
         run: |
           TAGS=(
             "latest"
