@@ -11,15 +11,19 @@ async fn setup_db() -> PgPool {
         .connect(&db_url)
         .await
         .expect("Failed to connect to Postgres");
+    // Drop tables for a clean start
+    sqlx::query("DROP TABLE IF EXISTS items")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DROP TABLE IF EXISTS schema_version")
+        .execute(&pool)
+        .await
+        .unwrap();
     // Run migrations
     crate::db::db_migrate(&pool)
         .await
         .expect("Migration failed");
-    // Clean up before each test
-    sqlx::query("DELETE FROM items")
-        .execute(&pool)
-        .await
-        .unwrap();
     pool
 }
 
