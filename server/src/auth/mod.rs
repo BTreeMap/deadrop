@@ -130,3 +130,6 @@ pub fn build_and_encrypt_challenge_jwt(
     let jwt = create_challenge_jwt(&claims, config)?;
     encrypt_jwt_for_recipient(&jwt, recipient_pubkey_b64)
 }
+
+#[cfg(test)]
+mod tests;
