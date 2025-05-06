@@ -31,6 +31,9 @@ jobs:
 
   build-matrix:
     needs: set-env
+    permissions:
+      contents: read
+      packages: write
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -41,9 +44,6 @@ jobs:
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             variant: arm64
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
@@ -61,8 +61,6 @@ jobs:
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
-        env:
-          SOURCE_DATE_EPOCH: ${{ needs.set-env.outputs.SOURCE_DATE_EPOCH_VAR }}
         with:
           context: ./server
           platforms: ${{ matrix.platform }}
@@ -75,12 +73,14 @@ jobs:
             ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ needs.set-env.outputs.DATE_VAR }}.${{ matrix.variant }}
             ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ needs.set-env.outputs.DATE_TIME_VAR }}.${{ matrix.variant }}
           outputs: "type=registry,compression=zstd,force-compression=true,compression-level=3,rewrite-timestamp=true,oci-mediatypes=true"
+        env:
+          SOURCE_DATE_EPOCH: ${{ needs.set-env.outputs.SOURCE_DATE_EPOCH_VAR }}
 
   create-manifest:
     needs: [set-env, build-matrix]
-    runs-on: ubuntu-24.04
     permissions:
       packages: write
+    runs-on: ubuntu-24.04
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -90,11 +90,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create and push manifest list
-        env:
-          DOCKER_IMAGE_NAME: ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}
-          DATE_VAR: ${{ needs.set-env.outputs.DATE_VAR }}
-          DATE_TIME_VAR: ${{ needs.set-env.outputs.DATE_TIME_VAR }}
-          SHA_VAR: ${{ needs.set-env.outputs.SHA_VAR }}
         run: |
           # The most specific tags for the platform-specific images
           AMD64_TAG="${DOCKER_IMAGE_NAME}:${SHA_VAR}.${DATE_TIME_VAR}.amd64"
@@ -119,3 +114,8 @@ jobs:
           # Create a single manifest with multiple tags
           echo "Creating manifest with tags: ${TAGS[*]}"
           docker buildx imagetools create "${TAG_OPTIONS[@]}" "${AMD64_TAG}" "${ARM64_TAG}"
+        env:
+          DOCKER_IMAGE_NAME: ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}
+          DATE_VAR: ${{ needs.set-env.outputs.DATE_VAR }}
+          DATE_TIME_VAR: ${{ needs.set-env.outputs.DATE_TIME_VAR }}
+          SHA_VAR: ${{ needs.set-env.outputs.SHA_VAR }}
