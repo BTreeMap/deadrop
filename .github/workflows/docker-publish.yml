@@ -37,10 +37,10 @@ jobs:
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
-            variant_suffix: amd64
+            variant: amd64
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
-            variant_suffix: arm64
+            variant: arm64
     permissions:
       contents: read
       packages: write
@@ -68,12 +68,12 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:latest.${{ matrix.variant_suffix }}
-            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.DATE_VAR }}.${{ matrix.variant_suffix }}
-            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.DATE_TIME_VAR }}.${{ matrix.variant_suffix }}
-            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ matrix.variant_suffix }}
-            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ needs.set-env.outputs.DATE_VAR }}.${{ matrix.variant_suffix }}
-            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ needs.set-env.outputs.DATE_TIME_VAR }}.${{ matrix.variant_suffix }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:latest.${{ matrix.variant }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.DATE_VAR }}.${{ matrix.variant }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.DATE_TIME_VAR }}.${{ matrix.variant }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ matrix.variant }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ needs.set-env.outputs.DATE_VAR }}.${{ matrix.variant }}
+            ${{ needs.set-env.outputs.DOCKER_IMAGE_NAME }}:${{ needs.set-env.outputs.SHA_VAR }}.${{ needs.set-env.outputs.DATE_TIME_VAR }}.${{ matrix.variant }}
           outputs: "type=registry,compression=zstd,force-compression=true,compression-level=3,rewrite-timestamp=true,oci-mediatypes=true"
 
   create-manifest:
@@ -96,6 +96,12 @@ jobs:
           DATE_TIME_VAR: ${{ needs.set-env.outputs.DATE_TIME_VAR }}
           SHA_VAR: ${{ needs.set-env.outputs.SHA_VAR }}
         run: |
+          # The most specific tags for the platform-specific images
+          AMD64_TAG="${DOCKER_IMAGE_NAME}:${SHA_VAR}.${DATE_TIME_VAR}.amd64"
+          ARM64_TAG="${DOCKER_IMAGE_NAME}:${SHA_VAR}.${DATE_TIME_VAR}.arm64"
+
+          # All the tags we want to create
+          TAG_OPTIONS=()
           TAGS=(
             "latest"
             "${DATE_VAR}"
@@ -105,10 +111,11 @@ jobs:
             "${SHA_VAR}.${DATE_TIME_VAR}"
           )
 
+          # Build the tag options for docker buildx imagetools
           for tag in "${TAGS[@]}"; do
-            echo "Processing tag: ${tag}"
-            docker manifest create ${DOCKER_IMAGE_NAME}:${tag} \
-              ${DOCKER_IMAGE_NAME}:${tag}.amd64 \
-              ${DOCKER_IMAGE_NAME}:${tag}.arm64
-            docker manifest push ${DOCKER_IMAGE_NAME}:${tag}
+            TAG_OPTIONS+=(--tag "${DOCKER_IMAGE_NAME}:${tag}")
           done
+
+          # Create a single manifest with multiple tags
+          echo "Creating manifest with tags: ${TAGS[*]}"
+          docker buildx imagetools create "${TAG_OPTIONS[@]}" "${AMD64_TAG}" "${ARM64_TAG}"
