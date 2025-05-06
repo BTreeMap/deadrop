@@ -1,8 +1,11 @@
 name: Build and Publish Docker image to GHCR
 
 on:
+  schedule:
+    - cron: '0 4 * * *'
+    - cron: '0 16 * * *'
   push:
-    branches: [main]
+    branches: [ "main" ]
 
 jobs:
   set-env:
