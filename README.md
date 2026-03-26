@@ -10,9 +10,10 @@ Encrypted "dead‑drop" service allowing users to anonymously submit and retriev
 
 * **Client (`deadrop`)**
 
+  * `keygen`: generate an age X25519 identity + public key
   * `send`: encrypt & upload text or files
-  * `retrieve`: authenticate & download all ciphertexts for your key
-    * Fully stateless challenge using encrypted JWTs; no server-side session storage
+  * `receive`: authenticate & download all ciphertexts for your key
+  * Fully stateless challenge using encrypted JWTs; no server-side session storage
 
 * **Server (`deadrop.joefang.org`)**
 
@@ -27,10 +28,7 @@ Encrypted "dead‑drop" service allowing users to anonymously submit and retriev
 
 * **Client**
 
-  * `bash` (≥ 4.4)
-  * [`age`](https://github.com/FiloSottile/age) (X25519 encryption)
-  * [`curl`](https://curl.se)
-  * [`jq`](https://stedolan.github.io/jq)
+  * [Rust](https://www.rust-lang.org/) (stable toolchain)
 
 * **Server**
 
@@ -84,7 +82,7 @@ Server endpoint: `POST /upload`
 Headers: `X-PubKey: <pubkey>`
 Body: binary ciphertext
 
-### `retrieve`
+### `receive`
 
 Authenticate via encrypted JWT and download items:
 
@@ -98,6 +96,14 @@ deadrop receive -i id_x25519 -o ./downloads
 4. Server verifies JWT (`sub`, `aud: "/retrieve"`, `exp`), then returns stored items as a paginated JSON list of item IDs and an optional opaque `next_cursor` token for pagination.
 
 Each item is saved and decrypted locally. To fetch more items, pass the `next_cursor` value as the `cursor` query parameter in the next request. The format and contents of the cursor are not specified and may change; treat it as an opaque string.
+
+### `keygen`
+
+Generate a fresh X25519 identity and matching public key:
+
+```sh
+deadrop keygen -o ./id_x25519
+```
 
 ---
 

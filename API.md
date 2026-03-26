@@ -21,7 +21,7 @@ Authentication relies on a challenge-response mechanism using the client's X2551
 Uploads encrypted data associated with a public key.
 
 * **Headers**:
-  * `X-PubKey: <user X25519 pubkey (base64)>`
+  * `X-PubKey: <user X25519 pubkey>`
 * **Body**: Raw binary ciphertext.
 * **Response**:
   * `201 Created`: On successful upload.
@@ -34,7 +34,7 @@ Server stores the binary blob associated with the provided public key and a time
 Initiates the authentication process by requesting an encrypted challenge token.
 
 * **Headers**:
-  * `X-PubKey: <user X25519 pubkey (base64)>`
+  * `X-PubKey: <user X25519 pubkey>`
 * **Body**: JSON object specifying the scope and any related data.
 
   ```json

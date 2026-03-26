@@ -1,6 +1,7 @@
 use age::Decryptor;
 use age::Encryptor;
 use age::Identity;
+use age::secrecy::ExposeSecret;
 use age::x25519;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -162,7 +163,7 @@ fn keygen(output: &Path) -> Result<(), CliError> {
     let identity = x25519::Identity::generate();
     let recipient = identity.to_public();
 
-    let private_contents = format!("{}\n", identity.to_string());
+    let private_contents = format!("{}\n", identity.to_string().expose_secret());
     fs::write(output, private_contents)?;
 
     let pub_path = output.with_extension("pub");
@@ -174,10 +175,7 @@ fn keygen(output: &Path) -> Result<(), CliError> {
     Ok(())
 }
 
-fn get_send_payload(
-    message: Option<String>,
-    file: Option<PathBuf>,
-) -> Result<Vec<u8>, CliError> {
+fn get_send_payload(message: Option<String>, file: Option<PathBuf>) -> Result<Vec<u8>, CliError> {
     match (message, file) {
         (Some(m), None) => Ok(m.into_bytes()),
         (None, Some(path)) => fs::read(path).map_err(CliError::from),
@@ -199,7 +197,10 @@ fn parse_pubkey(pubkey_input: &str) -> Result<x25519::Recipient, CliError> {
 
     let trimmed = content.trim();
     trimmed.parse::<x25519::Recipient>().map_err(|err| {
-        CliError::InvalidInput(format!("Invalid age recipient public key '{}': {err}", trimmed))
+        CliError::InvalidInput(format!(
+            "Invalid age recipient public key '{}': {err}",
+            trimmed
+        ))
     })
 }
 
@@ -227,8 +228,9 @@ fn encrypt_for_recipient(
     recipient: &x25519::Recipient,
     plaintext: &[u8],
 ) -> Result<Vec<u8>, CliError> {
-    let encryptor = Encryptor::with_recipients(std::iter::once(recipient as &dyn age::Recipient))
-        .map_err(|e| CliError::Crypto(format!("failed to initialize encryptor: {e}")))?;
+    let encryptor =
+        Encryptor::with_recipients(std::iter::once(recipient as &dyn age::Recipient))
+            .map_err(|e| CliError::Crypto(format!("failed to initialize encryptor: {e}")))?;
 
     let mut encrypted = Vec::new();
     let mut writer = encryptor
@@ -255,7 +257,9 @@ fn decrypt_with_identity(
 
     let mut reader = decryptor
         .decrypt(std::iter::once(identity as &dyn Identity))
-        .map_err(|e| CliError::InvalidInput(format!("Cannot decrypt with provided identity: {e}")))?;
+        .map_err(|e| {
+            CliError::InvalidInput(format!("Cannot decrypt with provided identity: {e}"))
+        })?;
 
     let mut out = Vec::new();
     reader
@@ -277,7 +281,7 @@ async fn send(
     let upload_url = endpoint.join("upload")?;
     let response = http
         .post(upload_url)
-        .header("X-PubKey", BASE64.encode(pubkey.as_bytes()))
+        .header("X-PubKey", pubkey)
         .body(encrypted)
         .send()
         .await?;
@@ -311,9 +315,9 @@ async fn authenticate(
     }
 
     let body: ChallengeResponse = response.json().await?;
-    let challenge_ciphertext = BASE64.decode(body.ciphertext.as_bytes()).map_err(|e| {
-        CliError::Crypto(format!("challenge ciphertext is not valid base64: {e}"))
-    })?;
+    let challenge_ciphertext = BASE64
+        .decode(body.ciphertext.as_bytes())
+        .map_err(|e| CliError::Crypto(format!("challenge ciphertext is not valid base64: {e}")))?;
 
     let jwt = decrypt_with_identity(identity, &challenge_ciphertext)?;
     String::from_utf8(jwt)
@@ -331,67 +335,78 @@ async fn receive(
 
     let jwt = authenticate(http, endpoint, &identity).await?;
 
-    let retrieve_url = endpoint.join("retrieve")?;
-    let response = http
-        .post(retrieve_url)
-        .bearer_auth(&jwt)
-        .send()
-        .await?;
+    let mut cursor: Option<String> = None;
+    let mut found_any = false;
+    loop {
+        let mut retrieve_url = endpoint.join("retrieve")?;
+        if let Some(cursor_value) = &cursor {
+            retrieve_url
+                .query_pairs_mut()
+                .append_pair("cursor", cursor_value);
+        }
 
-    if response.status() != StatusCode::OK {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(CliError::HttpStatus { status, body });
-    }
-
-    let retrieve: RetrieveResponse = response.json().await?;
-
-    if retrieve.items.is_empty() {
-        println!("No items found.");
-        return Ok(());
-    }
-
-    for item_id in retrieve.items {
-        let download_url = endpoint.join(&format!("download/{item_id}"))?;
-        let response = http.get(download_url).bearer_auth(&jwt).send().await?;
+        let response = http.post(retrieve_url).bearer_auth(&jwt).send().await?;
 
         if response.status() != StatusCode::OK {
-            eprintln!(
-                "Warning: failed to download item {item_id} (HTTP {}).",
-                response.status()
-            );
-            continue;
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(CliError::HttpStatus { status, body });
         }
 
-        let ciphertext = response.bytes().await?.to_vec();
-        let encrypted_path = output_dir.join(format!("item_{item_id}.age"));
-        let decrypted_path = output_dir.join(format!("item_{item_id}.dec"));
+        let retrieve: RetrieveResponse = response.json().await?;
 
-        fs::write(&encrypted_path, &ciphertext)?;
+        if retrieve.items.is_empty() && cursor.is_none() {
+            println!("No items found.");
+            return Ok(());
+        }
 
-        match decrypt_with_identity(&identity, &ciphertext) {
-            Ok(plaintext) => {
-                fs::write(&decrypted_path, plaintext)?;
-                println!(
-                    "Downloaded {} and decrypted to {}",
-                    encrypted_path.display(),
-                    decrypted_path.display()
-                );
-            }
-            Err(err) => {
+        for item_id in retrieve.items {
+            found_any = true;
+            let download_url = endpoint.join(&format!("download/{item_id}"))?;
+            let response = http.get(download_url).bearer_auth(&jwt).send().await?;
+
+            if response.status() != StatusCode::OK {
                 eprintln!(
-                    "Warning: failed to decrypt {}: {}",
-                    encrypted_path.display(),
-                    err
+                    "Warning: failed to download item {item_id} (HTTP {}).",
+                    response.status()
                 );
+                continue;
             }
+
+            let ciphertext = response.bytes().await?.to_vec();
+            let encrypted_path = output_dir.join(format!("item_{item_id}.age"));
+            let decrypted_path = output_dir.join(format!("item_{item_id}.dec"));
+
+            fs::write(&encrypted_path, &ciphertext)?;
+
+            match decrypt_with_identity(&identity, &ciphertext) {
+                Ok(plaintext) => {
+                    fs::write(&decrypted_path, plaintext)?;
+                    println!(
+                        "Downloaded {} and decrypted to {}",
+                        encrypted_path.display(),
+                        decrypted_path.display()
+                    );
+                }
+                Err(err) => {
+                    eprintln!(
+                        "Warning: failed to decrypt {}: {}",
+                        encrypted_path.display(),
+                        err
+                    );
+                }
+            }
+        }
+
+        if let Some(next) = retrieve.next_cursor {
+            cursor = Some(next);
+        } else {
+            break;
         }
     }
 
-    if retrieve.next_cursor.is_some() {
-        eprintln!(
-            "More items are available on the server; cursor pagination is not yet fetched automatically."
-        );
+    if !found_any {
+        println!("No items found.");
     }
 
     Ok(())
