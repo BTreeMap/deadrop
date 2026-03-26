@@ -12,7 +12,7 @@ Authentication relies on a challenge-response mechanism using the client's X2551
 4. **Authenticated Request**: The client makes requests to scope-protected endpoints (e.g., `/retrieve`, `/notify`, `/download`) by including the decrypted JWT in the standard `Authorization` header: `Authorization: Bearer <jwt>`.
 5. **Verification**: The server verifies the JWT's signature, expiration (`exp`), and audience (`aud`) claim against the requested endpoint. The subject (`sub`) claim identifies the authenticated public key.
 
-* `X-PubKey`: The client's public key (base64 encoded). Required for `/upload` and `/challenge`.
+* `X-PubKey`: The client's public key (plain age recipient string for server compatibility).
 
 ## Endpoints
 

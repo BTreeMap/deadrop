@@ -8,12 +8,11 @@ Encrypted "dead‑drop" service allowing users to anonymously submit and retriev
 
 ## Features
 
-* **Client (`deadrop.sh`)**
+* **Client (`deadrop`)**
 
   * `send`: encrypt & upload text or files
   * `retrieve`: authenticate & download all ciphertexts for your key
-  * `notify`: register Telegram push notifications
-  * Fully stateless challenge using encrypted JWTs; no server-side session storage
+    * Fully stateless challenge using encrypted JWTs; no server-side session storage
 
 * **Server (`deadrop.joefang.org`)**
 
@@ -44,19 +43,19 @@ Encrypted "dead‑drop" service allowing users to anonymously submit and retriev
 
 ## Installation
 
-Clone the repo and make the client script executable:
+Clone the repo and build the Rust client:
 
 ```sh
 git clone https://github.com/joefang/deadrop.git
-cd deadrop
-chmod +x deadrop.sh
+cd deadrop/client
+cargo build --release
 ```
 
 Server code is in `/server`. See its `Dockerfile` for build instructions and its own README (to be created) for deployment details.
 
 ---
 
-## Client Usage (`deadrop.sh`)
+## Client Usage (`deadrop`)
 
 ### Common flags
 
@@ -75,10 +74,10 @@ Encrypt and upload data:
 
 ```sh
 # upload a string
-deadrop.sh send -k id_x25519.pub -m "hello world"
+deadrop send -k id_x25519.pub -m "hello world"
 
 # upload a file
-deadrop.sh send -k id_x25519.pub -f /path/to/secret.txt
+deadrop send -k id_x25519.pub -f /path/to/secret.txt
 ```
 
 Server endpoint: `POST /upload`
@@ -90,7 +89,7 @@ Body: binary ciphertext
 Authenticate via encrypted JWT and download items:
 
 ```sh
-deadrop.sh retrieve -i id_x25519 -o ./downloads
+deadrop receive -i id_x25519 -o ./downloads
 ```
 
 1. Client calls `POST /challenge` with `{ "pubkey": "<pub>", "scope": "retrieve" }` → returns `{ "ciphertext": "<age-encrypted JWT>" }`
@@ -99,19 +98,6 @@ deadrop.sh retrieve -i id_x25519 -o ./downloads
 4. Server verifies JWT (`sub`, `aud: "/retrieve"`, `exp`), then returns stored items as a paginated JSON list of item IDs and an optional opaque `next_cursor` token for pagination.
 
 Each item is saved and decrypted locally. To fetch more items, pass the `next_cursor` value as the `cursor` query parameter in the next request. The format and contents of the cursor are not specified and may change; treat it as an opaque string.
-
-### `notify`
-
-Register a Telegram hook:
-
-```sh
-deadrop.sh notify -i id_x25519 -t "@alice"  # or numeric user ID
-```
-
-1. Client calls `POST /challenge` with `{ "pubkey": "<pub>", "scope": "notify", "telegram": "<target>" }` → returns `{ "ciphertext": "<age-encrypted JWT>" }`
-2. Client decrypts ciphertext to get the JWT.
-3. Client calls `POST /notify` with `Authorization: Bearer <jwt>` header.
-4. Server verifies JWT (`sub`, `aud: "/notify"`, `exp`, `telegram`), then registers the hook.
 
 ---
 
