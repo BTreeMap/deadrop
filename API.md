@@ -12,7 +12,7 @@ Authentication relies on a challenge-response mechanism using the client's X2551
 4. **Authenticated Request**: The client makes requests to scope-protected endpoints (e.g., `/retrieve`, `/notify`, `/download`) by including the decrypted JWT in the standard `Authorization` header: `Authorization: Bearer <jwt>`.
 5. **Verification**: The server verifies the JWT's signature, expiration (`exp`), and audience (`aud`) claim against the requested endpoint. The subject (`sub`) claim identifies the authenticated public key.
 
-* `X-PubKey`: The client's public key (base64 encoded). Required for `/upload` and `/challenge`.
+* `X-PubKey`: The client's public key (plain age recipient string for server compatibility).
 
 ## Endpoints
 
@@ -21,7 +21,7 @@ Authentication relies on a challenge-response mechanism using the client's X2551
 Uploads encrypted data associated with a public key.
 
 * **Headers**:
-  * `X-PubKey: <user X25519 pubkey (base64)>`
+  * `X-PubKey: <user X25519 pubkey>`
 * **Body**: Raw binary ciphertext.
 * **Response**:
   * `201 Created`: On successful upload.
@@ -34,7 +34,7 @@ Server stores the binary blob associated with the provided public key and a time
 Initiates the authentication process by requesting an encrypted challenge token.
 
 * **Headers**:
-  * `X-PubKey: <user X25519 pubkey (base64)>`
+  * `X-PubKey: <user X25519 pubkey>`
 * **Body**: JSON object specifying the scope and any related data.
 
   ```json
